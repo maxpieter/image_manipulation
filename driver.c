@@ -215,7 +215,9 @@ static void create(int dim)
 	    result[RIDX(i,j,dim)].alpha = 0; // fully transparent pixel
 	}
     }
-    bgc = orig[RIDX(0,0,dim)];
+    bgc.red = random_in_interval(0, 65536);
+    bgc.green = random_in_interval(0, 65536);
+    bgc.blue = random_in_interval(0, 65536);
     bgc.alpha = USHRT_MAX;
 
     return;
@@ -263,10 +265,6 @@ static pixel check_blended_pixel(int dim, int i, int j, pixel *src) {
     pixel result;
     float a = ( (float)(src[RIDX(i,j,dim)].alpha) ) / USHRT_MAX;
 
-    // we pick the pixel at RIDX(0,0,dim) to be the background pixel.
-    // it's randomly generated.
-    pixel bgc = src[RIDX(0,0,dim)];
-    
     result.red   = (a * src[RIDX(i,j,dim)].red  ) + ( (1 - a) * bgc.red  );
     result.green = (a * src[RIDX(i,j,dim)].green) + ( (1 - a) * bgc.green);
     result.blue  = (a * src[RIDX(i,j,dim)].blue) +  ( (1 - a) * bgc.blue );
