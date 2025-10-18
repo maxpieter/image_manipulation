@@ -98,25 +98,27 @@ static pixel *result = NULL;       /* result image */
 static int benchmark_only = 0;
 
 /* Keep track of the best blend, rotate and smooth score for grading */
-double rotate_maxmean = 0.0;
-char *rotate_maxmean_desc = NULL;
+static double rotate_maxmean = 0.0;
+static char *rotate_maxmean_desc = NULL;
 
-double rotate_t_maxmean = 0.0;
-char *rotate_t_maxmean_desc = NULL;
+static double rotate_t_maxmean = 0.0;
+static char *rotate_t_maxmean_desc = NULL;
 
-double blend_maxmean = 0.0;
-char *blend_maxmean_desc = NULL;
+static double blend_maxmean = 0.0;
+static char *blend_maxmean_desc = NULL;
 
-double blend_v_maxmean = 0.0;
-char *blend_v_maxmean_desc = NULL;
+static double blend_v_maxmean = 0.0;
+static char *blend_v_maxmean_desc = NULL;
 
-double smooth_maxmean = 0.0;
-char *smooth_maxmean_desc = NULL;
+static double smooth_maxmean = 0.0;
+static char *smooth_maxmean_desc = NULL;
 
-double smooth_n_maxmean = 0.0;
-char *smooth_n_maxmean_desc = NULL;
+static double smooth_n_maxmean = 0.0;
+static char *smooth_n_maxmean_desc = NULL;
 
-pixel bgc; // background color for blend functions.
+/* background color for blend functions */
+pixel bgc; // non-static to make this a global variable accessible from kernel.c
+static pixel copy_of_bgc; // backup
 
 /******************** Functions begin *************************/
 
@@ -215,11 +217,18 @@ static void create(int dim)
 	    result[RIDX(i,j,dim)].alpha = 0; // fully transparent pixel
 	}
     }
+    /* original background color initialized to random colors */
     bgc.red = random_in_interval(0, 65536);
     bgc.green = random_in_interval(0, 65536);
     bgc.blue = random_in_interval(0, 65536);
     bgc.alpha = USHRT_MAX;
 
+    /* copy of original background color for checking results */
+    copy_of_bgc.red = bgc.red;
+    copy_of_bgc.green = bgc.green;
+    copy_of_bgc.blue = bgc.blue;
+    copy_of_bgc.alpha = bgc.alpha;
+    
     return;
 }
 
@@ -257,7 +266,7 @@ static int check_orig(int dim)
 		printf("Error: Original image has been changed!\n");
 		return 1;
 	    }
-
+    
     return 0;
 }
 
@@ -288,6 +297,12 @@ static int check_blend(int dim) {
     if (check_orig(dim)) 
 	return 1; 
 
+    /* return 1 if the background color has been changed */
+    if ( compare_pixels ( bgc, copy_of_bgc ) ) {
+      printf("Error: Original background color has been changed!\n");
+      return 1;
+    }	    
+    
     for (i = 0; i < dim; i++) {
 	for (j = 0; j < dim; j++) {
 	    pixel blended = check_blended_pixel(dim, i, j, orig);
