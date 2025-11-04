@@ -29,11 +29,11 @@ student_t student = {
  * naive_rotate - The naive baseline version of rotate 
  */
 /* stride pattern, visualization (we recommend that you draw this for your functions):
-    dst         src
-    3 7 B F     0 1 2 3
-    2 6 A E     4 5 6 7
-    1 5 9 D     8 9 A B
-    0 4 8 C     C D E F
+    dst               src
+    3 7 B F           0 1 2 3
+    2 6 A E           4 5 6 7
+    1 5 9 D           8 9 A B
+    0 4 8 C           C D E F
  */
 char naive_rotate_descr[] = "naive_rotate: Naive baseline implementation";
 void naive_rotate(int dim, pixel *src, pixel *dst) 
@@ -46,13 +46,16 @@ void naive_rotate(int dim, pixel *src, pixel *dst)
 }
 
 /* 
- * rotate - Your current working version of rotate
- * IMPORTANT: This is the version you will be graded on
+ * rotate - Optimized working version of rotate
  */
-char rotate_descr[] = "rotate: Current working version";
+char rotate_descr[] = "rotate: optimized working version";
 void rotate(int dim, pixel *src, pixel *dst)
 {
-    naive_rotate(dim, src, dst);
+    int i, j;
+    for (j = 0; j < dim; j++)
+	for (i = 0; i < dim; i++)
+	    dst[RIDX(dim-1-j, i, dim)] = src[RIDX(i, j, dim)];
+
 }
 
 /*
@@ -62,6 +65,7 @@ void rotate(int dim, pixel *src, pixel *dst)
  */
 void register_rotate_functions() 
 {
+    add_rotate_function(&naive_rotate, naive_rotate_descr);
     add_rotate_function(&rotate, rotate_descr);
     /* ... Register additional test functions here */
 }
