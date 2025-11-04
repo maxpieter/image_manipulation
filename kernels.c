@@ -49,13 +49,14 @@ void naive_rotate(int dim, pixel *src, pixel *dst)
  * rotate - Optimized working version of rotate
  */
 char rotate_descr[] = "rotate: optimized working version";
-void rotate(int dim, pixel *src, pixel *dst)
+void rotate(int dim, pixel * __restrict src, pixel * __restrict dst)
 {
-    for (int j = 0; j < dim; j++) {
-	int dst_col = dim - 1 - j;
-	for (int i = 0; i < dim; i++) {
-	    dst[dst_col * dim + i] = src[i * dim + j];
-	}
+    const int N = dim;
+    for (int j = 0; j < N; j++) {
+    	int dst_col = N - 1 - j;
+        for (int i = 0; i < N; i++) {
+            dst[dst_col * N + i] = src[i * N + j];
+        }
     }
 }
 
