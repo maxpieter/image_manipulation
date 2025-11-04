@@ -51,11 +51,12 @@ void naive_rotate(int dim, pixel *src, pixel *dst)
 char rotate_descr[] = "rotate: optimized working version";
 void rotate(int dim, pixel *src, pixel *dst)
 {
-    int i, j;
-    for (j = 0; j < dim; j++)
-	for (i = 0; i < dim; i++)
-	    dst[RIDX(dim-1-j, i, dim)] = src[RIDX(i, j, dim)];
-
+    for (int j = 0; j < dim; j++) {
+	int dst_col = dim - 1 - j;
+	for (int i = 0; i < dim; i++) {
+	    dst[dst_col * dim + i] = src[i * dim + j];
+	}
+    }
 }
 
 /*
