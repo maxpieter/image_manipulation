@@ -46,10 +46,10 @@ void naive_rotate(int dim, pixel *src, pixel *dst)
 }
 
 /* 
- * rotate - Optimized working version of rotate
- */
-char rotate_descr[] = "rotate: optimized working version";
-void rotate(int dim, pixel * __restrict src, pixel * __restrict dst)
+ * rotate _1 swtich loops and precalculate dst_col
+ * */
+char rotate_descr_1[] = "rotate: switch loop optimization";
+void rotate_1(int dim, pixel *src, pixel *dst)
 {
     const int N = dim;
     for (int j = 0; j < N; j++) {
@@ -60,6 +60,23 @@ void rotate(int dim, pixel * __restrict src, pixel * __restrict dst)
     }
 }
 
+/* 
+ * rotate_2 ...........................
+ * */
+char rotate_descr_2[] = "rotate: .....................";
+void rotate_2(int dim, pixel *src, pixel *dst)
+{
+    const int N = dim;
+    for (int j = 0; j < N; j++) {
+    	int dst_col = N - 1 - j;
+        for (int i = 0; i < N; i++) {
+            dst[dst_col * N + i] = src[i * N + j];
+        }
+    }
+}
+
+
+
 /*
  * register_rotate_functions - Register all of your different versions
  *     of the rotate kernel with the driver by calling the
@@ -68,7 +85,8 @@ void rotate(int dim, pixel * __restrict src, pixel * __restrict dst)
 void register_rotate_functions() 
 {
     add_rotate_function(&naive_rotate, naive_rotate_descr);
-    add_rotate_function(&rotate, rotate_descr);
+    add_rotate_function(&rotate_1, rotate_descr_1);
+    add_rotate_function(&rotate_2, rotate_descr_2);
     /* ... Register additional test functions here */
 }
 
