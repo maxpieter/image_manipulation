@@ -9,7 +9,7 @@
 #include "defs.h"
 #include "smooth.h" // helper functions for naive_smooth
 #include "blend.h"  // helper functions for naive_blend
-
+#define BLOCK_SIZE 32
 /* 
  * Please fill in the following struct
  */
@@ -46,7 +46,23 @@ void naive_rotate(int dim, pixel *src, pixel *dst)
 }
 
 /* 
- * rotate _1 swtich loops and precalculate dst_col
+ * rotate: final optimization
+ * */
+char rotate_descr[] = "rotate: final optimization";
+void rotate(int dim, pixel *src, pixel *dst)
+{
+    const int N = dim;
+    for (int j = 0; j < N; j++) {
+    	int dst_col = N - 1 - j;
+        for (int i = 0; i < N; i++) {
+            dst[dst_col * N + i] = src[i * N + j];
+        }
+    }
+}
+
+/* 
+ * rotate_1: swtich loops and precalculate dst_col
+
  * */
 char rotate_descr_1[] = "rotate: switch loop optimization";
 void rotate_1(int dim, pixel *src, pixel *dst)
@@ -60,21 +76,78 @@ void rotate_1(int dim, pixel *src, pixel *dst)
     }
 }
 
+
+static inline int min_int(int a, int b) {return a < b ? a : b;}
+
+
 /* 
- * rotate_2 ...........................
+ * rotate_2: ...........................
  * */
 char rotate_descr_2[] = "rotate: .....................";
 void rotate_2(int dim, pixel *src, pixel *dst)
 {
+    inline int min_int(int a, int b) {return a < b ? a : b;}
+
     const int N = dim;
-    for (int j = 0; j < N; j++) {
-    	int dst_col = N - 1 - j;
-        for (int i = 0; i < N; i++) {
-            dst[dst_col * N + i] = src[i * N + j];
-        }
-    }
+
+	    for (int ii = 0; ii < N; ii += BLOCK_SIZE) {
+		    int i_max = min_int(ii + BLOCK_SIZE, N);
+		    for (int jj = 0; jj < N; jj += BLOCK_SIZE) {
+			    int j_max = min_int(jj + BLOCK_SIZE, N);
+
+			    for (int j = jj; j < j_max; ++j) {
+				    int d = (N - 1 - j) * N + ii;
+				    int s = ii * N + j;
+				    for (int i = ii; i < i_max; ++i, d++, s += N) {
+					    dst[d] = src[s];
+				    }
+			    }
+		    }
+	    }
 }
 
+
+/* 
+ * rotate_3: ...........................
+ * */
+char rotate_descr_3[] = "rotate: .....................";
+void rotate_3(int dim, pixel *src, pixel *dst)
+{
+
+    const int N = dim;
+    pixel tmp[N * N];
+	
+    // first transpose (src -> tmp)
+    for (int ii = 0; ii < N; ii += BLOCK_SIZE) {
+	    const int i_max = min_int(ii + BLOCK_SIZE, N);
+	    for (int jj = 0; jj < N; jj += BLOCK_SIZE) {
+		    const int j_max = min_int(jj + BLOCK_SIZE, N);
+		    for (int i = ii; i < i_max; ++i) {
+			    const int src_row = i * N;
+			    for (int j = jj; j < j_max; ++j) {
+				tmp[j * N + i] = src[src_row + j];
+			    }
+		    }
+	    }
+    }
+
+    // then reverse columns (tmp -> dst
+    for (int jj = 0; jj < N; jj += BLOCK_SIZE) {
+	    const int j_max = min_int(jj + BLOCK_SIZE, N);
+	    for (int ii = 0; ii < N; ii += BLOCK_SIZE) {
+		    const int i_max = min_int(ii + BLOCK_SIZE, N);
+		    for (int j = jj; j< j_max; ++j) {
+			    int d = ( N - 1 - ii) * N + j;
+			    int s = ii * N + j;
+			    for (int i = ii; i < i_max; ++i, d -= N, s += N) {
+				    dst[d] = tmp[s];
+			    }
+		    }
+
+	    }
+    }
+
+}
 
 
 /*
@@ -85,8 +158,11 @@ void rotate_2(int dim, pixel *src, pixel *dst)
 void register_rotate_functions() 
 {
     add_rotate_function(&naive_rotate, naive_rotate_descr);
-    add_rotate_function(&rotate_1, rotate_descr_1);
+    add_rotate_function(&rotate, rotate_descr);
+    //add_rotate_function(&rotate_1, rotate_descr_1);
     add_rotate_function(&rotate_2, rotate_descr_2);
+    //add_rotate_function(&rotate_3, rotate_descr_3);
+
     /* ... Register additional test functions here */
 }
 
