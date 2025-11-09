@@ -10,6 +10,8 @@
 #include "smooth.h" // helper functions for naive_smooth
 #include "blend.h"  // helper functions for naive_blend
 #define BLOCK_SIZE 32
+#include <pthread.h>
+
 /* 
  * Please fill in the following struct
  */
@@ -45,20 +47,7 @@ void naive_rotate(int dim, pixel *src, pixel *dst)
 	    dst[RIDX(dim-1-j, i, dim)] = src[RIDX(i, j, dim)];
 }
 
-/* 
- * rotate: final optimization
- * */
-char rotate_descr[] = "rotate: final optimization";
-void rotate(int dim, pixel *src, pixel *dst)
-{
-    const int N = dim;
-    for (int j = 0; j < N; j++) {
-    	int dst_col = N - 1 - j;
-        for (int i = 0; i < N; i++) {
-            dst[dst_col * N + i] = src[i * N + j];
-        }
-    }
-}
+
 
 /* 
  * rotate_1: swtich loops and precalculate dst_col
@@ -76,14 +65,13 @@ void rotate_1(int dim, pixel *src, pixel *dst)
     }
 }
 
-
+// helper function to calculate the lesser integer
 static inline int min_int(int a, int b) {return a < b ? a : b;}
 
-
 /* 
- * rotate_2: ...........................
+ * rotate_2: divide image into blocks for cache sized processing
  * */
-char rotate_descr_2[] = "rotate: .....................";
+char rotate_descr_2[] = "rotate: divide image into blocks for cache sized processing";
 void rotate_2(int dim, pixel *src, pixel *dst)
 {
     inline int min_int(int a, int b) {return a < b ? a : b;}
@@ -108,9 +96,9 @@ void rotate_2(int dim, pixel *src, pixel *dst)
 
 
 /* 
- * rotate_3: ...........................
+ * rotate_3: divided in blocks + separate processing of transpose and reverse
  * */
-char rotate_descr_3[] = "rotate: .....................";
+char rotate_descr_3[] = "rotate:  divided in blocks + separate processing of transpose and reverse";
 void rotate_3(int dim, pixel *src, pixel *dst)
 {
 
@@ -146,9 +134,52 @@ void rotate_3(int dim, pixel *src, pixel *dst)
 
 	    }
     }
-
 }
 
+/* 
+ * rotate_4: loop unrolling & block processing
+ * */
+char rotate_descr_4[] = "rotate_4: loop unrolling & block processing";
+void rotate_4(int dim, pixel *src, pixel *dst)
+{
+    const int N = dim;
+
+    for (int jj = 0; jj < N; jj += BLOCK_SIZE) {
+        const int j_max = min_int(jj + BLOCK_SIZE, N);
+
+        for (int ii = 0; ii < N; ii += BLOCK_SIZE) {
+            const int i_max = min_int(ii + BLOCK_SIZE,N);
+            for (int j = jj; j < j_max; ++j) {
+                // base pointers
+                pixel *d = dst + (N - 1 - j) * N + ii; // start of destination row
+                pixel *s = src + ii * N + j;           // start of source column
+
+                int i = ii;
+
+                // modest unrolli of 4, avoids register spills
+                for (; i + 4 <= i_max; i += 4, d += 4, s += 4 * N) {
+                    d[0] = s[0 * N];
+                    d[1] = s[1 * N];
+                    d[2] = s[2 * N];
+                    d[3] = s[3 * N];
+                }
+                // rest of image if not multiple of 4
+                for (; i < i_max; ++i, ++d, s += N) {
+                    *d = *s;
+                }
+            }
+        }
+    }
+}
+
+/* 
+ * rotate: final optimization
+ * */
+char rotate_descr[] = "rotate: final optimization";
+void rotate(int dim, pixel *src, pixel *dst)
+{
+    rotate_4(dim, src, dst);
+}
 
 /*
  * register_rotate_functions - Register all of your different versions
@@ -159,11 +190,6 @@ void register_rotate_functions()
 {
     add_rotate_function(&naive_rotate, naive_rotate_descr);
     add_rotate_function(&rotate, rotate_descr);
-    //add_rotate_function(&rotate_1, rotate_descr_1);
-    add_rotate_function(&rotate_2, rotate_descr_2);
-    //add_rotate_function(&rotate_3, rotate_descr_3);
-
-    /* ... Register additional test functions here */
 }
 
 /******************************************************************************
