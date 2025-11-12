@@ -11,14 +11,10 @@
 #include "blend.h"  // helper functions for naive_blend
 #include <pthread.h>
 
-
-/* 
- * Please fill in the following struct
- */
 student_t student = {
     "mbez",            	 	/* ITU alias */
     "Max Pieter Bezemer",    	/* Full name */
-    "mbez@itu.dk", 		/* Email address */
+    "mbez@itu.dk", 		    /* Email address */
 };
 
 /******************************************************************************
@@ -75,8 +71,6 @@ void register_rotate_functions()
  * ROTATE_T KERNEL
  *****************************************************************************/
 
-// Your different versions of the rotate_t kernel go here
-// (i.e. rotate with multi-threading)
 #define THREAD_COUNT 8
 #define BLOCK_WIDTH 16
 
@@ -137,7 +131,6 @@ void *multi_rotate_worker(void *args)
 
 /*
  * rotate_t - Your current working version of rotate_t
- * IMPORTANT: This is the version you will be graded on
  */
 char rotate_t_descr[] = "rotate_t: Current working version";
 void rotate_t(int dim, pixel *src, pixel *dst)
@@ -169,18 +162,11 @@ void rotate_t(int dim, pixel *src, pixel *dst)
         rotate(dim, src, dst);
 }
 
-/*********************************************************************
- * register_rotate_t_functions - Register all of your different versions
- *     of the rotate_t kernel with the driver by calling the
- *     add_rotate_t_function() for each test function. When you run the
- *     driver program, it will test and report the performance of each
- *     registered test function.
- *********************************************************************/
+// register_rotate_t_functions 
 
 void register_rotate_t_functions()
 {
     add_rotate_t_function(&rotate_t, rotate_t_descr);
-    /* ... Register additional test functions here */
 }
 
 /******************************************************************************
@@ -204,25 +190,25 @@ char smooth_descr[] = "Loop Peeling, Function Inlining, Manual Caching";
 void smooth(int dim, pixel *src, pixel *dst)
 {
     int i, k, k_base;
-    // Top-Left Corner (0, 0)
+    // top-left corner (0,0)
     dst[0].blue = (src[0].blue + src[1].blue + src[dim].blue + src[dim + 1].blue) >> 2;
     dst[0].green = (src[0].green + src[1].green + src[dim].green + src[dim + 1].green) >> 2;
     dst[0].red = (src[0].red + src[1].red + src[dim].red + src[dim + 1].red) >> 2;
     dst[0].alpha = (src[0].alpha + src[1].alpha + src[dim].alpha + src[dim + 1].alpha) >> 2;
 
-    // Top-Right Corner (0, dim-1)
+    // top right corner (0, dim-1)
     dst[dim - 1].blue = (src[dim - 1].blue + src[dim - 2].blue + src[dim + dim - 2].blue + src[dim + dim - 1].blue) >> 2;
     dst[dim - 1].green = (src[dim - 1].green + src[dim - 2].green + src[dim + dim - 2].green + src[dim + dim - 1].green) >> 2;
     dst[dim - 1].red = (src[dim - 1].red + src[dim - 2].red + src[dim + dim - 2].red + src[dim + dim - 1].red) >> 2;
     dst[dim - 1].alpha = (src[dim - 1].alpha + src[dim - 2].alpha + src[dim + dim - 2].alpha + src[dim + dim - 1].alpha) >> 2;
 
-    // Bottom-Left Corner (dim-1, 0)
+    // bottom left corner (dim-1,0)
     dst[RIDX(dim - 1, 0, dim)].blue = (src[RIDX(dim - 1, 0, dim)].blue + src[RIDX(dim - 1, 1, dim)].blue + src[RIDX(dim - 2, 0, dim)].blue + src[RIDX(dim - 2, 1, dim)].blue) >> 2;
     dst[RIDX(dim - 1, 0, dim)].green = (src[RIDX(dim - 1, 0, dim)].green + src[RIDX(dim - 1, 1, dim)].green + src[RIDX(dim - 2, 0, dim)].green + src[RIDX(dim - 2, 1, dim)].green) >> 2;
     dst[RIDX(dim - 1, 0, dim)].red = (src[RIDX(dim - 1, 0, dim)].red + src[RIDX(dim - 1, 1, dim)].red + src[RIDX(dim - 2, 0, dim)].red + src[RIDX(dim - 2, 1, dim)].red) >> 2;
     dst[RIDX(dim - 1, 0, dim)].alpha = (src[RIDX(dim - 1, 0, dim)].alpha + src[RIDX(dim - 1, 1, dim)].alpha + src[RIDX(dim - 2, 0, dim)].alpha + src[RIDX(dim - 2, 1, dim)].alpha) >> 2;
 
-    // Bottom-Right Corner (dim-1, dim-1)
+    // bottom right corner (dim-1, dim-1)
     dst[RIDX(dim - 1, dim - 1, dim)].blue = (src[RIDX(dim - 1, dim - 1, dim)].blue + src[RIDX(dim - 1, dim - 2, dim)].blue + src[RIDX(dim - 2, dim - 2, dim)].blue + src[RIDX(dim - 2, dim - 1, dim)].blue) >> 2;
     dst[RIDX(dim - 1, dim - 1, dim)].green = (src[RIDX(dim - 1, dim - 1, dim)].green + src[RIDX(dim - 1, dim - 2, dim)].green + src[RIDX(dim - 2, dim - 2, dim)].green + src[RIDX(dim - 2, dim - 1, dim)].green) >> 2;
     dst[RIDX(dim - 1, dim - 1, dim)].red = (src[RIDX(dim - 1, dim - 1, dim)].red + src[RIDX(dim - 1, dim - 2, dim)].red + src[RIDX(dim - 2, dim - 2, dim)].red + src[RIDX(dim - 2, dim - 1, dim)].red) >> 2;
@@ -261,15 +247,15 @@ void smooth(int dim, pixel *src, pixel *dst)
         for (int j = 1; j <= dim - 2; j++)
         {
             k = k_base + j;
-            pixel p_tl = src[k - dim - 1]; // Top-Left
-            pixel p_tm = src[k - dim];     // Top-Middle
-            pixel p_tr = src[k - dim + 1]; // Top-Right
-            pixel p_ml = src[k - 1];       // Middle-Left
-            pixel p_mm = src[k];           // Middle-Middle (Self)
-            pixel p_mr = src[k + 1];       // Middle-Right
-            pixel p_bl = src[k + dim - 1]; // Bottom-Left
-            pixel p_bm = src[k + dim];     // Bottom-Middle
-            pixel p_br = src[k + dim + 1]; // Bottom-Right
+            pixel p_tl = src[k - dim - 1];
+            pixel p_tm = src[k - dim]; 
+            pixel p_tr = src[k - dim + 1];
+            pixel p_ml = src[k - 1];
+            pixel p_mm = src[k]; 
+            pixel p_mr = src[k + 1];
+            pixel p_bl = src[k + dim - 1];
+            pixel p_bm = src[k + dim];
+            pixel p_br = src[k + dim + 1];
 
             dst[k].blue = (p_tl.blue + p_tm.blue + p_tr.blue +
                            p_ml.blue + p_mm.blue + p_mr.blue +
@@ -295,15 +281,12 @@ void smooth(int dim, pixel *src, pixel *dst)
 }
 
 /*
- * register_smooth_functions - Register all of your different versions
- *     of the smooth kernel with the driver by calling the
- *     add_smooth_function() for each test function.
+ * register_smooth_functions
  */
 
 void register_smooth_functions()
 {
     add_smooth_function(&smooth, smooth_descr);
-    /* ... Register additional test functions here */
 }
 
 /******************************************************************************
