@@ -6,6 +6,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "defs.h"
 #include "smooth.h" // helper functions for naive_smooth
 #include "blend.h"  // helper functions for naive_blend
@@ -186,98 +187,118 @@ void naive_smooth(int dim, pixel *src, pixel *dst)
             dst[RIDX(i, j, dim)] = avg(dim, i, j, src); // `avg` defined in smooth.c
 }
 
-char smooth_descr[] = "Loop Peeling, Function Inlining, Manual Caching";
+char smooth_descr[] = "smooth: Row-summed scalar implementation";
+static inline void build_horizontal_sums(const pixel *row, int dim, pixel_sum *restrict out)
+{
+    for (int j = 0; j < dim; ++j) {
+        pixel_sum sum;
+        sum.red = row[j].red;
+        sum.green = row[j].green;
+        sum.blue = row[j].blue;
+        sum.alpha = row[j].alpha;
+        sum.num = 1;
+
+        if (j > 0) {
+            const pixel *left = row + j - 1;
+            sum.red += left->red;
+            sum.green += left->green;
+            sum.blue += left->blue;
+            sum.alpha += left->alpha;
+            sum.num++;
+        }
+        if (j + 1 < dim) {
+            const pixel *right = row + j + 1;
+            sum.red += right->red;
+            sum.green += right->green;
+            sum.blue += right->blue;
+            sum.alpha += right->alpha;
+            sum.num++;
+        }
+        out[j] = sum;
+    }
+}
+
 void smooth(int dim, pixel *src, pixel *dst)
 {
-    int i, k, k_base;
-    // top-left corner (0,0)
-    dst[0].blue = (src[0].blue + src[1].blue + src[dim].blue + src[dim + 1].blue) >> 2;
-    dst[0].green = (src[0].green + src[1].green + src[dim].green + src[dim + 1].green) >> 2;
-    dst[0].red = (src[0].red + src[1].red + src[dim].red + src[dim + 1].red) >> 2;
-    dst[0].alpha = (src[0].alpha + src[1].alpha + src[dim].alpha + src[dim + 1].alpha) >> 2;
-
-    // top right corner (0, dim-1)
-    dst[dim - 1].blue = (src[dim - 1].blue + src[dim - 2].blue + src[dim + dim - 2].blue + src[dim + dim - 1].blue) >> 2;
-    dst[dim - 1].green = (src[dim - 1].green + src[dim - 2].green + src[dim + dim - 2].green + src[dim + dim - 1].green) >> 2;
-    dst[dim - 1].red = (src[dim - 1].red + src[dim - 2].red + src[dim + dim - 2].red + src[dim + dim - 1].red) >> 2;
-    dst[dim - 1].alpha = (src[dim - 1].alpha + src[dim - 2].alpha + src[dim + dim - 2].alpha + src[dim + dim - 1].alpha) >> 2;
-
-    // bottom left corner (dim-1,0)
-    dst[RIDX(dim - 1, 0, dim)].blue = (src[RIDX(dim - 1, 0, dim)].blue + src[RIDX(dim - 1, 1, dim)].blue + src[RIDX(dim - 2, 0, dim)].blue + src[RIDX(dim - 2, 1, dim)].blue) >> 2;
-    dst[RIDX(dim - 1, 0, dim)].green = (src[RIDX(dim - 1, 0, dim)].green + src[RIDX(dim - 1, 1, dim)].green + src[RIDX(dim - 2, 0, dim)].green + src[RIDX(dim - 2, 1, dim)].green) >> 2;
-    dst[RIDX(dim - 1, 0, dim)].red = (src[RIDX(dim - 1, 0, dim)].red + src[RIDX(dim - 1, 1, dim)].red + src[RIDX(dim - 2, 0, dim)].red + src[RIDX(dim - 2, 1, dim)].red) >> 2;
-    dst[RIDX(dim - 1, 0, dim)].alpha = (src[RIDX(dim - 1, 0, dim)].alpha + src[RIDX(dim - 1, 1, dim)].alpha + src[RIDX(dim - 2, 0, dim)].alpha + src[RIDX(dim - 2, 1, dim)].alpha) >> 2;
-
-    // bottom right corner (dim-1, dim-1)
-    dst[RIDX(dim - 1, dim - 1, dim)].blue = (src[RIDX(dim - 1, dim - 1, dim)].blue + src[RIDX(dim - 1, dim - 2, dim)].blue + src[RIDX(dim - 2, dim - 2, dim)].blue + src[RIDX(dim - 2, dim - 1, dim)].blue) >> 2;
-    dst[RIDX(dim - 1, dim - 1, dim)].green = (src[RIDX(dim - 1, dim - 1, dim)].green + src[RIDX(dim - 1, dim - 2, dim)].green + src[RIDX(dim - 2, dim - 2, dim)].green + src[RIDX(dim - 2, dim - 1, dim)].green) >> 2;
-    dst[RIDX(dim - 1, dim - 1, dim)].red = (src[RIDX(dim - 1, dim - 1, dim)].red + src[RIDX(dim - 1, dim - 2, dim)].red + src[RIDX(dim - 2, dim - 2, dim)].red + src[RIDX(dim - 2, dim - 1, dim)].red) >> 2;
-    dst[RIDX(dim - 1, dim - 1, dim)].alpha = (src[RIDX(dim - 1, dim - 1, dim)].alpha + src[RIDX(dim - 1, dim - 2, dim)].alpha + src[RIDX(dim - 2, dim - 2, dim)].alpha + src[RIDX(dim - 2, dim - 1, dim)].alpha) >> 2;
-
-    for (int j = 1; j <= dim - 2; j++)
-    {
-        // top
-        i = j;
-        dst[j].blue = (src[j].blue + src[j + dim].blue + src[j - 1].blue + src[j + 1].blue + src[j + dim - 1].blue + src[j + dim + 1].blue) / 6;
-        dst[j].green = (src[j].green + src[j + dim].green + src[j - 1].green + src[j + 1].green + src[j + dim - 1].green + src[j + dim + 1].green) / 6;
-        dst[j].red = (src[j].red + src[j + dim].red + src[j - 1].red + src[j + 1].red + src[j + dim - 1].red + src[j + dim + 1].red) / 6;
-        dst[j].alpha = (src[j].alpha + src[j + dim].alpha + src[j - 1].alpha + src[j + 1].alpha + src[j + dim - 1].alpha + src[j + dim + 1].alpha) / 6;
-        // bottom
-        i = dim * dim - dim + j;
-        dst[i].blue = (src[i].blue + src[i - 1].blue + src[i + 1].blue + src[i - dim].blue + src[i - dim - 1].blue + src[i - dim + 1].blue) / 6;
-        dst[i].green = (src[i].green + src[i - 1].green + src[i + 1].green + src[i - dim].green + src[i - dim - 1].green + src[i - dim + 1].green) / 6;
-        dst[i].red = (src[i].red + src[i - 1].red + src[i + 1].red + src[i - dim].red + src[i - dim - 1].red + src[i - dim + 1].red) / 6;
-        dst[i].alpha = (src[i].alpha + src[i - 1].alpha + src[i + 1].alpha + src[i - dim].alpha + src[i - dim - 1].alpha + src[i - dim + 1].alpha) / 6;
-        // left edge
-        i = j * dim;
-        dst[i].blue = (src[i].blue + src[i - dim].blue + src[i - dim + 1].blue + src[i + 1].blue + src[i + dim].blue + src[i + dim + 1].blue) / 6;
-        dst[i].green = (src[i].green + src[i - dim].green + src[i - dim + 1].green + src[i + 1].green + src[i + dim].green + src[i + dim + 1].green) / 6;
-        dst[i].red = (src[i].red + src[i - dim].red + src[i - dim + 1].red + src[i + 1].red + src[i + dim].red + src[i + dim + 1].red) / 6;
-        dst[i].alpha = (src[i].alpha + src[i - dim].alpha + src[i - dim + 1].alpha + src[i + 1].alpha + src[i + dim].alpha + src[i + dim + 1].alpha) / 6;
-        // right edge
-        i = j * dim + dim - 1;
-        dst[i].blue = (src[i].blue + src[i - dim].blue + src[i - dim - 1].blue + src[i - 1].blue + src[i + dim].blue + src[i + dim - 1].blue) / 6;
-        dst[i].green = (src[i].green + src[i - dim].green + src[i - dim - 1].green + src[i - 1].green + src[i + dim].green + src[i + dim - 1].green) / 6;
-        dst[i].red = (src[i].red + src[i - dim].red + src[i - dim - 1].red + src[i - 1].red + src[i + dim].red + src[i + dim - 1].red) / 6;
-        dst[i].alpha = (src[i].alpha + src[i - dim].alpha + src[i - dim - 1].alpha + src[i - 1].alpha + src[i + dim].alpha + src[i + dim - 1].alpha) / 6;
+    if (dim == 0) {
+        return;
     }
-    for (int i = 1; i <= dim - 2; i++)
-    {
-        k_base = i * dim;
-        for (int j = 1; j <= dim - 2; j++)
-        {
-            k = k_base + j;
-            pixel p_tl = src[k - dim - 1];
-            pixel p_tm = src[k - dim]; 
-            pixel p_tr = src[k - dim + 1];
-            pixel p_ml = src[k - 1];
-            pixel p_mm = src[k]; 
-            pixel p_mr = src[k + 1];
-            pixel p_bl = src[k + dim - 1];
-            pixel p_bm = src[k + dim];
-            pixel p_br = src[k + dim + 1];
 
-            dst[k].blue = (p_tl.blue + p_tm.blue + p_tr.blue +
-                           p_ml.blue + p_mm.blue + p_mr.blue +
-                           p_bl.blue + p_bm.blue + p_br.blue) /
-                          9;
+    size_t row_bytes = (size_t)dim * sizeof(pixel_sum);
+    pixel_sum *row_above = malloc(row_bytes);
+    pixel_sum *row_curr = malloc(row_bytes);
+    pixel_sum *row_below = malloc(row_bytes);
 
-            dst[k].green = (p_tl.green + p_tm.green + p_tr.green +
-                            p_ml.green + p_mm.green + p_mr.green +
-                            p_bl.green + p_bm.green + p_br.green) /
-                           9;
+    if (!row_above || !row_curr || !row_below) {
+        free(row_above);
+        free(row_curr);
+        free(row_below);
+        naive_smooth(dim, src, dst);
+        return;
+    }
 
-            dst[k].red = (p_tl.red + p_tm.red + p_tr.red +
-                          p_ml.red + p_mm.red + p_mr.red +
-                          p_bl.red + p_bm.red + p_br.red) /
-                         9;
+    build_horizontal_sums(src, dim, row_curr);
+    memcpy(row_above, row_curr, row_bytes);
+    if (dim > 1) {
+        build_horizontal_sums(src + dim, dim, row_below);
+    } else {
+        memcpy(row_below, row_curr, row_bytes);
+    }
 
-            dst[k].alpha = (p_tl.alpha + p_tm.alpha + p_tr.alpha +
-                            p_ml.alpha + p_mm.alpha + p_mr.alpha +
-                            p_bl.alpha + p_bm.alpha + p_br.alpha) /
-                           9;
+    for (int i = 0; i < dim; ++i) {
+        pixel *drow = dst + (size_t)i * dim;
+        const pixel_sum *top = (i > 0) ? row_above : NULL;
+        const pixel_sum *mid = row_curr;
+        const pixel_sum *bot = (i < dim - 1) ? row_below : NULL;
+
+        for (int j = 0; j < dim; ++j) {
+            int total_r = mid[j].red;
+            int total_g = mid[j].green;
+            int total_b = mid[j].blue;
+            int total_a = mid[j].alpha;
+            int count = mid[j].num;
+
+            if (top) {
+                total_r += top[j].red;
+                total_g += top[j].green;
+                total_b += top[j].blue;
+                total_a += top[j].alpha;
+                count += top[j].num;
+            }
+            if (bot) {
+                total_r += bot[j].red;
+                total_g += bot[j].green;
+                total_b += bot[j].blue;
+                total_a += bot[j].alpha;
+                count += bot[j].num;
+            }
+
+            drow[j].red = (unsigned short)(total_r / count);
+            drow[j].green = (unsigned short)(total_g / count);
+            drow[j].blue = (unsigned short)(total_b / count);
+            drow[j].alpha = (unsigned short)(total_a / count);
+        }
+
+        if (i == dim - 1) {
+            break;
+        }
+
+        pixel_sum *tmp = row_above;
+        row_above = row_curr;
+        row_curr = row_below;
+        row_below = tmp;
+
+        int load_row = i + 2;
+        if (load_row >= dim) {
+            memcpy(row_below, row_curr, row_bytes);
+        } else {
+            build_horizontal_sums(src + (size_t)load_row * dim, dim, row_below);
         }
     }
+
+    free(row_above);
+    free(row_curr);
+    free(row_below);
 }
 
 /*
@@ -293,20 +314,154 @@ void register_smooth_functions()
  * SMOOTH_N KERNEL
  *****************************************************************************/
 
-char smooth_n_descr[] = "smooth_n: Current working version";
+#define SMOOTH_N_MAX_THREADS 8
+
+typedef struct {
+    int dim;
+    int start_row;
+    int end_row;
+    pixel *src;
+    pixel *dst;
+} smooth_n_args;
+
+static void* smooth_n_worker(void *arg)
+{
+    smooth_n_args *a = (smooth_n_args *)arg;
+    const int dim = a->dim;
+    int start = a->start_row;
+    int end = a->end_row;
+
+    if (start >= end) {
+        return NULL;
+    }
+
+    const pixel *src = a->src;
+    pixel *dst = a->dst;
+    size_t row_bytes = (size_t)dim * sizeof(pixel_sum);
+
+    pixel_sum *row_above = malloc(row_bytes);
+    pixel_sum *row_curr = malloc(row_bytes);
+    pixel_sum *row_below = malloc(row_bytes);
+    if (!row_above || !row_curr || !row_below) {
+        free(row_above);
+        free(row_curr);
+        free(row_below);
+        return NULL;
+    }
+
+    int prev_row = (start == 0) ? 0 : start - 1;
+    int curr_row = start;
+    int next_row = (start + 1 <= dim - 1) ? start + 1 : dim - 1;
+
+    build_horizontal_sums(src + (size_t)prev_row * dim, dim, row_above);
+    build_horizontal_sums(src + (size_t)curr_row * dim, dim, row_curr);
+    build_horizontal_sums(src + (size_t)next_row * dim, dim, row_below);
+
+    for (int i = start; i < end; ++i) {
+        pixel *drow = dst + (size_t)i * dim;
+        const pixel_sum *top = (i > 0) ? row_above : NULL;
+        const pixel_sum *mid = row_curr;
+        const pixel_sum *bot = (i < dim - 1) ? row_below : NULL;
+
+        for (int j = 0; j < dim; ++j) {
+            int total_r = mid[j].red;
+            int total_g = mid[j].green;
+            int total_b = mid[j].blue;
+            int total_a = mid[j].alpha;
+            int count = mid[j].num;
+
+            if (top) {
+                total_r += top[j].red;
+                total_g += top[j].green;
+                total_b += top[j].blue;
+                total_a += top[j].alpha;
+                count += top[j].num;
+            }
+            if (bot) {
+                total_r += bot[j].red;
+                total_g += bot[j].green;
+                total_b += bot[j].blue;
+                total_a += bot[j].alpha;
+                count += bot[j].num;
+            }
+
+            drow[j].red = (unsigned short)(total_r / count);
+            drow[j].green = (unsigned short)(total_g / count);
+            drow[j].blue = (unsigned short)(total_b / count);
+            drow[j].alpha = (unsigned short)(total_a / count);
+        }
+
+        if (i + 1 >= end) {
+            break;
+        }
+
+        pixel_sum *tmp = row_above;
+        row_above = row_curr;
+        row_curr = row_below;
+        row_below = tmp;
+
+        prev_row = curr_row;
+        curr_row = next_row;
+        if (next_row < dim - 1) {
+            next_row++;
+            build_horizontal_sums(src + (size_t)next_row * dim, dim, row_below);
+        } else {
+            memcpy(row_below, row_curr, row_bytes);
+        }
+    }
+
+    free(row_above);
+    free(row_curr);
+    free(row_below);
+    return NULL;
+}
+
+char smooth_n_descr[] = "smooth_n: Row-partitioned multithreaded smoothing";
 void smooth_n(int dim, pixel *src, pixel *dst)
 {
-    naive_smooth(dim, src, dst);
+    if (dim < 128) {
+        smooth(dim, src, dst);
+        return;
+    }
+
+    int threads = (dim >= 2048) ? 8 : (dim >= 1024 ? 4 : 2);
+    if (threads > SMOOTH_N_MAX_THREADS) {
+        threads = SMOOTH_N_MAX_THREADS;
+    }
+    if (threads > dim) {
+        threads = dim;
+    }
+    if (threads < 1) {
+        threads = 1;
+    }
+
+    pthread_t workers[SMOOTH_N_MAX_THREADS];
+    smooth_n_args args[SMOOTH_N_MAX_THREADS];
+
+    int base = dim / threads;
+    int rem = dim % threads;
+    int row = 0;
+    for (int t = 0; t < threads; ++t) {
+        int take = base + (t < rem ? 1 : 0);
+        args[t].dim = dim;
+        args[t].src = src;
+        args[t].dst = dst;
+        args[t].start_row = row;
+        args[t].end_row = row + take;
+        row += take;
+        pthread_create(&workers[t], NULL, smooth_n_worker, &args[t]);
+    }
+
+    for (int t = 0; t < threads; ++t) {
+        pthread_join(workers[t], NULL);
+    }
 }
 
 /*
- * register_smooth_n_functions - Register all of your different versions
- *     of the smooth_n kernel with the driver by calling the
- *     add_smooth_n_function() for each test function.
+ * register_smooth_n_functions
  */
 void register_smooth_n_functions() {
     add_smooth_n_function(&smooth_n, smooth_n_descr);
-    /* ... Register additional test functions here */
 }
 
 
