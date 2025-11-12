@@ -187,25 +187,111 @@ void register_rotate_t_functions()
  * SMOOTH KERNEL
  *****************************************************************************/
 
-// Your different versions of the smooth kernel go here
-
 /*
- * naive_smooth - The naive baseline version of smooth 
+ * naive_smooth - The naive baseline version of smooth
  */
 char naive_smooth_descr[] = "naive_smooth: Naive baseline implementation";
-void naive_smooth(int dim, pixel *src, pixel *dst) 
+void naive_smooth(int dim, pixel *src, pixel *dst)
 {
     int i, j;
 
     for (i = 0; i < dim; i++)
-	for (j = 0; j < dim; j++)
-	    dst[RIDX(i, j, dim)] = avg(dim, i, j, src); // `avg` defined in smooth.c
+        for (j = 0; j < dim; j++)
+            dst[RIDX(i, j, dim)] = avg(dim, i, j, src); // `avg` defined in smooth.c
 }
 
-char smooth_descr[] = "smooth: Current working version";
+char smooth_descr[] = "Loop Peeling, Function Inlining, Manual Caching";
 void smooth(int dim, pixel *src, pixel *dst)
 {
-  naive_smooth(dim, src, dst);
+    int i, k, k_base;
+    // Top-Left Corner (0, 0)
+    dst[0].blue = (src[0].blue + src[1].blue + src[dim].blue + src[dim + 1].blue) >> 2;
+    dst[0].green = (src[0].green + src[1].green + src[dim].green + src[dim + 1].green) >> 2;
+    dst[0].red = (src[0].red + src[1].red + src[dim].red + src[dim + 1].red) >> 2;
+    dst[0].alpha = (src[0].alpha + src[1].alpha + src[dim].alpha + src[dim + 1].alpha) >> 2;
+
+    // Top-Right Corner (0, dim-1)
+    dst[dim - 1].blue = (src[dim - 1].blue + src[dim - 2].blue + src[dim + dim - 2].blue + src[dim + dim - 1].blue) >> 2;
+    dst[dim - 1].green = (src[dim - 1].green + src[dim - 2].green + src[dim + dim - 2].green + src[dim + dim - 1].green) >> 2;
+    dst[dim - 1].red = (src[dim - 1].red + src[dim - 2].red + src[dim + dim - 2].red + src[dim + dim - 1].red) >> 2;
+    dst[dim - 1].alpha = (src[dim - 1].alpha + src[dim - 2].alpha + src[dim + dim - 2].alpha + src[dim + dim - 1].alpha) >> 2;
+
+    // Bottom-Left Corner (dim-1, 0)
+    dst[RIDX(dim - 1, 0, dim)].blue = (src[RIDX(dim - 1, 0, dim)].blue + src[RIDX(dim - 1, 1, dim)].blue + src[RIDX(dim - 2, 0, dim)].blue + src[RIDX(dim - 2, 1, dim)].blue) >> 2;
+    dst[RIDX(dim - 1, 0, dim)].green = (src[RIDX(dim - 1, 0, dim)].green + src[RIDX(dim - 1, 1, dim)].green + src[RIDX(dim - 2, 0, dim)].green + src[RIDX(dim - 2, 1, dim)].green) >> 2;
+    dst[RIDX(dim - 1, 0, dim)].red = (src[RIDX(dim - 1, 0, dim)].red + src[RIDX(dim - 1, 1, dim)].red + src[RIDX(dim - 2, 0, dim)].red + src[RIDX(dim - 2, 1, dim)].red) >> 2;
+    dst[RIDX(dim - 1, 0, dim)].alpha = (src[RIDX(dim - 1, 0, dim)].alpha + src[RIDX(dim - 1, 1, dim)].alpha + src[RIDX(dim - 2, 0, dim)].alpha + src[RIDX(dim - 2, 1, dim)].alpha) >> 2;
+
+    // Bottom-Right Corner (dim-1, dim-1)
+    dst[RIDX(dim - 1, dim - 1, dim)].blue = (src[RIDX(dim - 1, dim - 1, dim)].blue + src[RIDX(dim - 1, dim - 2, dim)].blue + src[RIDX(dim - 2, dim - 2, dim)].blue + src[RIDX(dim - 2, dim - 1, dim)].blue) >> 2;
+    dst[RIDX(dim - 1, dim - 1, dim)].green = (src[RIDX(dim - 1, dim - 1, dim)].green + src[RIDX(dim - 1, dim - 2, dim)].green + src[RIDX(dim - 2, dim - 2, dim)].green + src[RIDX(dim - 2, dim - 1, dim)].green) >> 2;
+    dst[RIDX(dim - 1, dim - 1, dim)].red = (src[RIDX(dim - 1, dim - 1, dim)].red + src[RIDX(dim - 1, dim - 2, dim)].red + src[RIDX(dim - 2, dim - 2, dim)].red + src[RIDX(dim - 2, dim - 1, dim)].red) >> 2;
+    dst[RIDX(dim - 1, dim - 1, dim)].alpha = (src[RIDX(dim - 1, dim - 1, dim)].alpha + src[RIDX(dim - 1, dim - 2, dim)].alpha + src[RIDX(dim - 2, dim - 2, dim)].alpha + src[RIDX(dim - 2, dim - 1, dim)].alpha) >> 2;
+
+    for (int j = 1; j <= dim - 2; j++)
+    {
+        // top
+        i = j;
+        dst[j].blue = (src[j].blue + src[j + dim].blue + src[j - 1].blue + src[j + 1].blue + src[j + dim - 1].blue + src[j + dim + 1].blue) / 6;
+        dst[j].green = (src[j].green + src[j + dim].green + src[j - 1].green + src[j + 1].green + src[j + dim - 1].green + src[j + dim + 1].green) / 6;
+        dst[j].red = (src[j].red + src[j + dim].red + src[j - 1].red + src[j + 1].red + src[j + dim - 1].red + src[j + dim + 1].red) / 6;
+        dst[j].alpha = (src[j].alpha + src[j + dim].alpha + src[j - 1].alpha + src[j + 1].alpha + src[j + dim - 1].alpha + src[j + dim + 1].alpha) / 6;
+        // bottom
+        i = dim * dim - dim + j;
+        dst[i].blue = (src[i].blue + src[i - 1].blue + src[i + 1].blue + src[i - dim].blue + src[i - dim - 1].blue + src[i - dim + 1].blue) / 6;
+        dst[i].green = (src[i].green + src[i - 1].green + src[i + 1].green + src[i - dim].green + src[i - dim - 1].green + src[i - dim + 1].green) / 6;
+        dst[i].red = (src[i].red + src[i - 1].red + src[i + 1].red + src[i - dim].red + src[i - dim - 1].red + src[i - dim + 1].red) / 6;
+        dst[i].alpha = (src[i].alpha + src[i - 1].alpha + src[i + 1].alpha + src[i - dim].alpha + src[i - dim - 1].alpha + src[i - dim + 1].alpha) / 6;
+        // left edge
+        i = j * dim;
+        dst[i].blue = (src[i].blue + src[i - dim].blue + src[i - dim + 1].blue + src[i + 1].blue + src[i + dim].blue + src[i + dim + 1].blue) / 6;
+        dst[i].green = (src[i].green + src[i - dim].green + src[i - dim + 1].green + src[i + 1].green + src[i + dim].green + src[i + dim + 1].green) / 6;
+        dst[i].red = (src[i].red + src[i - dim].red + src[i - dim + 1].red + src[i + 1].red + src[i + dim].red + src[i + dim + 1].red) / 6;
+        dst[i].alpha = (src[i].alpha + src[i - dim].alpha + src[i - dim + 1].alpha + src[i + 1].alpha + src[i + dim].alpha + src[i + dim + 1].alpha) / 6;
+        // right edge
+        i = j * dim + dim - 1;
+        dst[i].blue = (src[i].blue + src[i - dim].blue + src[i - dim - 1].blue + src[i - 1].blue + src[i + dim].blue + src[i + dim - 1].blue) / 6;
+        dst[i].green = (src[i].green + src[i - dim].green + src[i - dim - 1].green + src[i - 1].green + src[i + dim].green + src[i + dim - 1].green) / 6;
+        dst[i].red = (src[i].red + src[i - dim].red + src[i - dim - 1].red + src[i - 1].red + src[i + dim].red + src[i + dim - 1].red) / 6;
+        dst[i].alpha = (src[i].alpha + src[i - dim].alpha + src[i - dim - 1].alpha + src[i - 1].alpha + src[i + dim].alpha + src[i + dim - 1].alpha) / 6;
+    }
+    for (int i = 1; i <= dim - 2; i++)
+    {
+        k_base = i * dim;
+        for (int j = 1; j <= dim - 2; j++)
+        {
+            k = k_base + j;
+            pixel p_tl = src[k - dim - 1]; // Top-Left
+            pixel p_tm = src[k - dim];     // Top-Middle
+            pixel p_tr = src[k - dim + 1]; // Top-Right
+            pixel p_ml = src[k - 1];       // Middle-Left
+            pixel p_mm = src[k];           // Middle-Middle (Self)
+            pixel p_mr = src[k + 1];       // Middle-Right
+            pixel p_bl = src[k + dim - 1]; // Bottom-Left
+            pixel p_bm = src[k + dim];     // Bottom-Middle
+            pixel p_br = src[k + dim + 1]; // Bottom-Right
+
+            dst[k].blue = (p_tl.blue + p_tm.blue + p_tr.blue +
+                           p_ml.blue + p_mm.blue + p_mr.blue +
+                           p_bl.blue + p_bm.blue + p_br.blue) /
+                          9;
+
+            dst[k].green = (p_tl.green + p_tm.green + p_tr.green +
+                            p_ml.green + p_mm.green + p_mr.green +
+                            p_bl.green + p_bm.green + p_br.green) /
+                           9;
+
+            dst[k].red = (p_tl.red + p_tm.red + p_tr.red +
+                          p_ml.red + p_mm.red + p_mr.red +
+                          p_bl.red + p_bm.red + p_br.red) /
+                         9;
+
+            dst[k].alpha = (p_tl.alpha + p_tm.alpha + p_tr.alpha +
+                            p_ml.alpha + p_mm.alpha + p_mr.alpha +
+                            p_bl.alpha + p_bm.alpha + p_br.alpha) /
+                           9;
+        }
+    }
 }
 
 /*
@@ -214,7 +300,8 @@ void smooth(int dim, pixel *src, pixel *dst)
  *     add_smooth_function() for each test function.
  */
 
-void register_smooth_functions() {
+void register_smooth_functions()
+{
     add_smooth_function(&smooth, smooth_descr);
     /* ... Register additional test functions here */
 }
@@ -222,9 +309,6 @@ void register_smooth_functions() {
 /******************************************************************************
  * SMOOTH_N KERNEL
  *****************************************************************************/
-
-// Your different versions of the smooth_n kernel go here
-// (i.e. where anything goes, including multithreading and SIMD).
 
 char smooth_n_descr[] = "smooth_n: Current working version";
 void smooth_n(int dim, pixel *src, pixel *dst)
@@ -241,6 +325,7 @@ void register_smooth_n_functions() {
     add_smooth_n_function(&smooth_n, smooth_n_descr);
     /* ... Register additional test functions here */
 }
+
 
 /******************************************************************************
  * BLEND KERNEL
