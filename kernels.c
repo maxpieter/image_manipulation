@@ -9,146 +9,40 @@
 #include "defs.h"
 #include "smooth.h" // helper functions for naive_smooth
 #include "blend.h"  // helper functions for naive_blend
-#define BLOCK_SIZE 32
 #include <pthread.h>
+
 
 /* 
  * Please fill in the following struct
  */
 student_t student = {
-    "mbez",             /* ITU alias */
-    "Max Pieter Bezemer",    /* Full name */
-    "mbez@itu.dk", /* Email address */
+    "mbez",            	 	/* ITU alias */
+    "Max Pieter Bezemer",    	/* Full name */
+    "mbez@itu.dk", 		/* Email address */
 };
 
 /******************************************************************************
  * ROTATE KERNEL
  *****************************************************************************/
 
-// Your different versions of the rotate kernel go here
-
-/* 
- * naive_rotate - The naive baseline version of rotate 
- */
-/* stride pattern, visualization (we recommend that you draw this for your functions):
-    dst               src
-    3 7 B F           0 1 2 3
-    2 6 A E           4 5 6 7
-    1 5 9 D           8 9 A B
-    0 4 8 C           C D E F
- */
-char naive_rotate_descr[] = "naive_rotate: Naive baseline implementation";
-void naive_rotate(int dim, pixel *src, pixel *dst) 
-{
-    int i, j;
-
-    for (i = 0; i < dim; i++)
-	for (j = 0; j < dim; j++)
-	    dst[RIDX(dim-1-j, i, dim)] = src[RIDX(i, j, dim)];
-}
-
-
-
-/* 
- * rotate_1: swtich loops and precalculate dst_col
-
- * */
-char rotate_descr_1[] = "rotate: switch loop optimization";
-void rotate_1(int dim, pixel *src, pixel *dst)
-{
-    const int N = dim;
-    for (int j = 0; j < N; j++) {
-    	int dst_col = N - 1 - j;
-        for (int i = 0; i < N; i++) {
-            dst[dst_col * N + i] = src[i * N + j];
-        }
-    }
-}
-
 // helper function to calculate the lesser integer
 static inline int min_int(int a, int b) {return a < b ? a : b;}
 
-/* 
- * rotate_2: divide image into blocks for cache sized processing
- * */
-char rotate_descr_2[] = "rotate: divide image into blocks for cache sized processing";
-void rotate_2(int dim, pixel *src, pixel *dst)
-{
-    inline int min_int(int a, int b) {return a < b ? a : b;}
-
-    const int N = dim;
-
-	    for (int ii = 0; ii < N; ii += BLOCK_SIZE) {
-		    int i_max = min_int(ii + BLOCK_SIZE, N);
-		    for (int jj = 0; jj < N; jj += BLOCK_SIZE) {
-			    int j_max = min_int(jj + BLOCK_SIZE, N);
-
-			    for (int j = jj; j < j_max; ++j) {
-				    int d = (N - 1 - j) * N + ii;
-				    int s = ii * N + j;
-				    for (int i = ii; i < i_max; ++i, d++, s += N) {
-					    dst[d] = src[s];
-				    }
-			    }
-		    }
-	    }
-}
-
+#define BLOCK_SIZE_ROTATE 32
 
 /* 
- * rotate_3: divided in blocks + separate processing of transpose and reverse
+ * rotate: loop unrolling & block processing
  * */
-char rotate_descr_3[] = "rotate:  divided in blocks + separate processing of transpose and reverse";
-void rotate_3(int dim, pixel *src, pixel *dst)
-{
-
-    const int N = dim;
-    pixel tmp[N * N];
-	
-    // first transpose (src -> tmp)
-    for (int ii = 0; ii < N; ii += BLOCK_SIZE) {
-	    const int i_max = min_int(ii + BLOCK_SIZE, N);
-	    for (int jj = 0; jj < N; jj += BLOCK_SIZE) {
-		    const int j_max = min_int(jj + BLOCK_SIZE, N);
-		    for (int i = ii; i < i_max; ++i) {
-			    const int src_row = i * N;
-			    for (int j = jj; j < j_max; ++j) {
-				tmp[j * N + i] = src[src_row + j];
-			    }
-		    }
-	    }
-    }
-
-    // then reverse columns (tmp -> dst
-    for (int jj = 0; jj < N; jj += BLOCK_SIZE) {
-	    const int j_max = min_int(jj + BLOCK_SIZE, N);
-	    for (int ii = 0; ii < N; ii += BLOCK_SIZE) {
-		    const int i_max = min_int(ii + BLOCK_SIZE, N);
-		    for (int j = jj; j< j_max; ++j) {
-			    int d = ( N - 1 - ii) * N + j;
-			    int s = ii * N + j;
-			    for (int i = ii; i < i_max; ++i, d -= N, s += N) {
-				    dst[d] = tmp[s];
-			    }
-		    }
-
-	    }
-    }
-}
-
-/* 
- * rotate_4: loop unrolling & block processing
- * */
-char rotate_descr_4[] = "rotate_4: loop unrolling & block processing";
-void rotate_4(int dim, pixel *src, pixel *dst)
+char rotate_descr[] = "rotate_4: loop unrolling & block processing";
+void rotate(int dim, pixel *src, pixel *dst)
 {
     const int N = dim;
 
-    for (int jj = 0; jj < N; jj += BLOCK_SIZE) {
-        const int j_max = min_int(jj + BLOCK_SIZE, N);
+    for (int jj = 0; jj < N; jj += BLOCK_SIZE_ROTATE) {
+        const int j_max = min_int(jj + BLOCK_SIZE_ROTATE, N);
 
-        for (int ii = 0; ii < N; ii += BLOCK_SIZE) {
-            const int i_max = min_int(ii + BLOCK_SIZE,N);
+        for (int ii = 0; ii < N; ii += BLOCK_SIZE_ROTATE) {
+            const int i_max = min_int(ii + BLOCK_SIZE_ROTATE,N);
             for (int j = jj; j < j_max; ++j) {
                 // base pointers
                 pixel *d = dst + (N - 1 - j) * N + ii; // start of destination row
@@ -172,23 +66,8 @@ void rotate_4(int dim, pixel *src, pixel *dst)
     }
 }
 
-/* 
- * rotate: final optimization
- * */
-char rotate_descr[] = "rotate: final optimization";
-void rotate(int dim, pixel *src, pixel *dst)
-{
-    rotate_4(dim, src, dst);
-}
-
-/*
- * register_rotate_functions - Register all of your different versions
- *     of the rotate kernel with the driver by calling the
- *     add_rotate_function() for each test function.
- */
 void register_rotate_functions() 
 {
-    add_rotate_function(&naive_rotate, naive_rotate_descr);
     add_rotate_function(&rotate, rotate_descr);
 }
 
@@ -198,15 +77,96 @@ void register_rotate_functions()
 
 // Your different versions of the rotate_t kernel go here
 // (i.e. rotate with multi-threading)
+#define THREAD_COUNT 8
+#define BLOCK_WIDTH 16
 
-/* 
+typedef struct
+{
+    int dim;
+    pixel *src;
+    pixel *dst;
+    int start;
+    int end;
+} rotate_thread_args;
+
+void *multi_rotate_worker(void *args)
+{
+    rotate_thread_args *data = (rotate_thread_args *)args;
+    int i, j, m, n;
+    int dim = data->dim;
+    int limit = dim - 1;
+    pixel *dst = data->dst;
+    pixel *src = data->src;
+    int src_inc = 8;
+    int dst_inc = dim * 8;
+    int BLOCK_HEIGHT = (dim == 2048) ? 4 : 8;
+
+    for (i = data->start; i < data->end; i += BLOCK_HEIGHT)
+    {
+        for (j = 0; j < dim; j += BLOCK_WIDTH)
+        {
+            int n_end = j + BLOCK_WIDTH;
+            for (m = i; m < i + BLOCK_HEIGHT && m < dim; m++)
+            {
+
+                int src_ptr = RIDX(m, j, dim);
+                int dst_ptr = RIDX(limit - j, m, dim);
+
+                for (n = j; n < n_end; n += 8)
+                {
+
+                    __builtin_prefetch(&src[src_ptr + 8], 0, 1);
+
+                    dst[dst_ptr] = src[src_ptr];
+                    dst[dst_ptr - dim] = src[src_ptr + 1];
+                    dst[dst_ptr - dim * 2] = src[src_ptr + 2];
+                    dst[dst_ptr - dim * 3] = src[src_ptr + 3];
+                    dst[dst_ptr - dim * 4] = src[src_ptr + 4];
+                    dst[dst_ptr - dim * 5] = src[src_ptr + 5];
+                    dst[dst_ptr - dim * 6] = src[src_ptr + 6];
+                    dst[dst_ptr - dim * 7] = src[src_ptr + 7];
+
+                    src_ptr += src_inc;
+                    dst_ptr -= dst_inc;
+                }
+            }
+        }
+    }
+    return NULL;
+}
+
+/*
  * rotate_t - Your current working version of rotate_t
  * IMPORTANT: This is the version you will be graded on
  */
 char rotate_t_descr[] = "rotate_t: Current working version";
 void rotate_t(int dim, pixel *src, pixel *dst)
 {
-    naive_rotate(dim, src, dst);
+    if (dim > 256)
+    {
+        int t;
+        pthread_t threads[THREAD_COUNT];
+        rotate_thread_args thread_args_list[THREAD_COUNT];
+        int per_thread = dim / THREAD_COUNT;
+
+        for (t = 0; t < THREAD_COUNT; t++)
+        {
+            thread_args_list[t].dim = dim;
+            thread_args_list[t].src = src;
+            thread_args_list[t].dst = dst;
+            thread_args_list[t].start = t * per_thread;
+            thread_args_list[t].end = (t == THREAD_COUNT - 1) ? dim : (t + 1) * per_thread;
+
+            pthread_create(&threads[t], NULL, multi_rotate_worker, (void *)&thread_args_list[t]);
+        }
+
+        for (t = 0; t < THREAD_COUNT; t++)
+        {
+            pthread_join(threads[t], NULL);
+        }
+    }
+    else
+        rotate(dim, src, dst);
 }
 
 /*********************************************************************
@@ -214,10 +174,10 @@ void rotate_t(int dim, pixel *src, pixel *dst)
  *     of the rotate_t kernel with the driver by calling the
  *     add_rotate_t_function() for each test function. When you run the
  *     driver program, it will test and report the performance of each
- *     registered test function.  
+ *     registered test function.
  *********************************************************************/
 
-void register_rotate_t_functions() 
+void register_rotate_t_functions()
 {
     add_rotate_t_function(&rotate_t, rotate_t_descr);
     /* ... Register additional test functions here */
